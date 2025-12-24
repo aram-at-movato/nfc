@@ -70,35 +70,59 @@ app.post('/api/generate-pass', async (req, res) => {
       description: 'Digital Card'
     });
 
-    // Update pass fields
+    // Get service centers with order counts for dynamic display
+    const serviceCenters = passStorage.getServiceCenters();
+    const totalOrders = Object.values(serviceCenters).reduce((sum, center) => sum + center.orders, 0);
+
+    // White card with membership, balance, and order info
+    // Header: Membership tier
+    pass.headerFields.push({
+      key: 'membership',
+      label: 'MEMBERSHIP',
+      value: 'Gold Member'
+    });
+
+    // Primary field: Customer name (large)
     pass.primaryFields.push({
-      key: 'customer',
-      label: 'CUSTOMER',
-      value: cardholderName,
+      key: 'name',
+      label: '',
+      value: cardholderName
+    });
+
+    // Secondary fields: Balance and Orders (two columns)
+    pass.secondaryFields.push({
+      key: 'balance',
+      label: 'BALANCE',
+      value: '$250.00',
       textAlignment: 'PKTextAlignmentLeft'
     });
 
     pass.secondaryFields.push({
-      key: 'ticketNumber',
-      label: 'TICKET',
-      value: id.substring(0, 8).toUpperCase(),
-      textAlignment: 'PKTextAlignmentLeft'
-    });
-
-    pass.secondaryFields.push({
-      key: 'issued',
-      label: 'DATE',
-      value: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      key: 'orders',
+      label: 'ORDERS',
+      value: totalOrders.toString(),
       textAlignment: 'PKTextAlignmentRight'
     });
 
-    // Get service centers with order counts
-    const serviceCenters = passStorage.getServiceCenters();
+    // Auxiliary field: Points (single field)
+    pass.auxiliaryFields.push({
+      key: 'points',
+      label: 'POINTS',
+      value: '1,250',
+      textAlignment: 'PKTextAlignmentCenter'
+    });
     
-    // Add service center order counts
-    Object.values(serviceCenters).forEach((center, index) => {
+    // Back side - Order details by location
+    pass.backFields.push({
+      key: 'orderSummary',
+      label: 'Order Summary',
+      value: `You have ${totalOrders} order${totalOrders !== 1 ? 's' : ''} ready for pickup at Movato service centers.`
+    });
+
+    // Add service center order counts with better formatting
+    Object.entries(serviceCenters).forEach(([centerId, center]) => {
       pass.backFields.push({
-        key: `center_${index}`,
+        key: centerId,
         label: center.name,
         value: `${center.orders} order${center.orders !== 1 ? 's' : ''} ready`,
         textAlignment: 'PKTextAlignmentLeft'
@@ -108,15 +132,22 @@ app.post('/api/generate-pass', async (req, res) => {
     // Back side - instructions
     pass.backFields.push({
       key: 'instructions',
-      label: 'Pickup Instructions',
-      value: 'Present this ticket at any Movato service center or authorized locker to collect your order. Order counts are updated in real-time.'
+      label: 'How to Pick Up',
+      value: '1. Present this card at any Movato service center\n2. Tap your phone to the NFC reader\n3. Collect your orders\n\nOrder counts update automatically.'
     });
     
     pass.backFields.push({
-      key: 'terms',
-      label: 'Terms & Conditions',
-      value: 'This ticket is valid for order pickup at Movato service centers and authorized lockers. The unique identifier can be scanned by NFC readers for verification.'
+      key: 'support',
+      label: 'Need Help?',
+      value: 'Contact Movato support or visit any service center. Your unique card number ensures secure order pickup.'
     });
+
+    // Add NFC field so the pass can be scanned
+    // The cardKey will be the unique identifier readable via NFC
+    pass.nfc = {
+      message: cardKey,  // The 32-character unique token
+      encryptionPublicKey: undefined
+    };
 
     // Store pass data for future updates
     passStorage.setPassData(id, {

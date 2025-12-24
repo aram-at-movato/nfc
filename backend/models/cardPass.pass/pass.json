@@ -3,11 +3,13 @@
   "passTypeIdentifier": "pass.com.nfcwallet.card",
   "teamIdentifier": "UYH66Q2435",
   "organizationName": "Movato",
-  "description": "Movato Service Ticket",
-  "foregroundColor": "rgb(51, 51, 51)",
+  "description": "Movato Pickup Card",
+  "foregroundColor": "rgb(17, 24, 39)",
   "backgroundColor": "rgb(255, 255, 255)",
-  "labelColor": "rgb(102, 102, 102)",
-  "generic": {
+  "labelColor": "rgb(107, 114, 128)",
+  "storeCard": {
+    "stripFields": [],
+    "headerFields": [],
     "primaryFields": [],
     "secondaryFields": [],
     "auxiliaryFields": [],
