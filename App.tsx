@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,73 +12,85 @@ import {
   Platform,
 } from 'react-native';
 import {StatusBar} from 'expo-status-bar';
-import NFCService, {CardData} from './services/NFCService';
+import WalletService, {CardData} from './services/WalletService';
 
 export default function App() {
-  const [cardNumber, setCardNumber] = useState('');
   const [cardholderName, setCardholderName] = useState('');
-  const [isNFCEnabled, setIsNFCEnabled] = useState(false);
-
-  useEffect(() => {
-    initializeNFC();
-    return () => {
-      NFCService.cleanup();
-    };
-  }, []);
-
-  const initializeNFC = async () => {
-    const success = await NFCService.init();
-    setIsNFCEnabled(success);
-  };
+  const [generatedCards, setGeneratedCards] = useState<CardData[]>([]);
 
   const validateInputs = (): boolean => {
-    if (!cardNumber.trim()) {
-      Alert.alert('Validation Error', 'Please enter a card number');
-      return false;
-    }
     if (!cardholderName.trim()) {
       Alert.alert('Validation Error', 'Please enter cardholder name');
       return false;
     }
-
     return true;
   };
 
-  const handleRegisterCard = async () => {
+  const handleGenerateCard = async () => {
     if (!validateInputs()) return;
 
-    const cardData: CardData = {
-      id: Date.now().toString(),
-      cardNumber: cardNumber.trim(),
-      cardholderName: cardholderName.trim(),
-      timestamp: Date.now(),
-    };
+    // Generate card with unique key
+    const cardData = await WalletService.generateCard(cardholderName);
 
-    const success = await NFCService.writeCardToNFC(cardData);
-    if (success) {
-      // Clear form
-      setCardNumber('');
-      setCardholderName('');
+    // Try to add to Apple Wallet
+    const addedToWallet = await WalletService.addToAppleWallet(cardData);
+
+    // Add to local list
+    setGeneratedCards([cardData, ...generatedCards]);
+    
+    // Clear form
+    setCardholderName('');
+    
+    if (addedToWallet) {
+      // Show success message
+      Alert.alert(
+        '✅ Ticket Generated!',
+        `Pickup ticket for ${cardData.cardholderName} is ready!\n\nTicket #${cardData.id.substring(0, 8).toUpperCase()}\n\nCheck your Apple Wallet!`,
+        [{text: 'OK'}]
+      );
+    } else {
+      // Show card generated but not added to wallet
+      Alert.alert(
+        '✅ Ticket Generated',
+        `Ticket for ${cardData.cardholderName}\n\nTicket #${cardData.id.substring(0, 8).toUpperCase()}\n\n(Could not add to Apple Wallet - check backend setup)`,
+        [{text: 'OK'}]
+      );
     }
   };
 
-  const handleReadCard = async () => {
-    const cardData = await NFCService.readCardFromNFC();
-    if (cardData) {
-      // Populate form with read data
-      setCardNumber(cardData.cardNumber);
-      setCardholderName(cardData.cardholderName);
-    }
+  const copyToClipboard = (text: string) => {
+    // In a real app, you'd use Clipboard API
+    Alert.alert('Card Key', WalletService.formatCardKey(text), [
+      {text: 'OK'}
+    ]);
   };
 
-  const formatCardNumber = (text: string) => {
-    // Remove all non-digit characters
-    const cleaned = text.replace(/\D/g, '');
-    // Add space every 4 digits
-    const formatted = cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
-    return formatted.substring(0, 19); // Max 16 digits + 3 spaces
+  const handleAddCardToWallet = async (card: CardData) => {
+    Alert.alert(
+      'Add to Wallet',
+      `Add pickup ticket for "${card.cardholderName}" to Apple Wallet?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Add to Wallet',
+          onPress: async () => {
+            const success = await WalletService.addToAppleWallet(card);
+            if (success) {
+              Alert.alert(
+                '✅ Added to Wallet!',
+                `Pickup ticket for ${card.cardholderName} has been added to Apple Wallet.`,
+                [{text: 'OK'}]
+              );
+            }
+          }
+        },
+        {
+          text: 'View Ticket ID',
+          onPress: () => Alert.alert('Ticket ID', `#${card.id.substring(0, 8).toUpperCase()}\n\nNFC ID: ${WalletService.formatCardKey(card.cardKey)}`, [{text: 'OK'}])
+        }
+      ]
+    );
   };
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,32 +102,13 @@ export default function App() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>NFC Wallet</Text>
-            <Text style={styles.subtitle}>Register Your Card</Text>
+            <Text style={styles.title}>Movato Tickets</Text>
+            <Text style={styles.subtitle}>Service Center Pickup</Text>
           </View>
-
-          {!isNFCEnabled && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>⚠️ NFC is not available on this device</Text>
-            </View>
-          )}
 
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Card Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0000 0000 0000 0000"
-                placeholderTextColor="#999"
-                value={cardNumber}
-                onChangeText={(text) => setCardNumber(formatCardNumber(text))}
-                keyboardType="number-pad"
-                maxLength={19}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Cardholder Name</Text>
+              <Text style={styles.label}>Customer Name</Text>
               <TextInput
                 style={styles.input}
                 placeholder="John Doe"
@@ -127,27 +120,42 @@ export default function App() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, styles.primaryButton, !isNFCEnabled && styles.disabledButton]}
-              onPress={handleRegisterCard}
-              disabled={!isNFCEnabled}>
-              <Text style={styles.buttonText}>📱 Register Card to NFC</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.secondaryButton, !isNFCEnabled && styles.disabledButton]}
-              onPress={handleReadCard}
-              disabled={!isNFCEnabled}>
-              <Text style={[styles.buttonText, styles.secondaryButtonText]}>🔍 Read Card from NFC</Text>
+              style={[styles.button, styles.primaryButton]}
+              onPress={handleGenerateCard}>
+              <Text style={styles.buttonText}>Generate Pickup Ticket</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>How to use:</Text>
-            <Text style={styles.infoText}>1. Fill in your card details</Text>
-            <Text style={styles.infoText}>2. Tap "Register Card to NFC"</Text>
-            <Text style={styles.infoText}>3. Hold your device near an NFC tag</Text>
-            <Text style={styles.infoText}>4. Your card will be registered!</Text>
+            <Text style={styles.infoText}>1. Enter your name</Text>
+            <Text style={styles.infoText}>2. Generate your pickup ticket</Text>
+            <Text style={styles.infoText}>3. Present at Movato service centers</Text>
+            <Text style={styles.infoText}>4. Scan at authorized lockers</Text>
           </View>
+
+          {generatedCards.length > 0 && (
+            <View style={styles.cardsSection}>
+              <Text style={styles.cardsSectionTitle}>Your Tickets</Text>
+              {generatedCards.map((card) => (
+                <TouchableOpacity
+                  key={card.id}
+                  style={styles.cardItem}
+                  onPress={() => handleAddCardToWallet(card)}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardName}>{card.cardholderName}</Text>
+                    <Text style={styles.cardDate}>
+                      {new Date(card.timestamp).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <Text style={styles.cardKey}>
+                    Ticket #{card.id.substring(0, 8).toUpperCase()}
+                  </Text>
+                  <Text style={styles.cardTapHint}>Tap to add to Apple Wallet</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -180,19 +188,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     color: '#666',
-  },
-  warningBox: {
-    backgroundColor: '#fff3cd',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-  },
-  warningText: {
-    color: '#856404',
-    fontSize: 14,
-    textAlign: 'center',
   },
   form: {
     backgroundColor: '#fff',
@@ -235,21 +230,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#007AFF',
   },
-  secondaryButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-  },
-  secondaryButtonText: {
-    color: '#007AFF',
   },
   infoBox: {
     backgroundColor: '#e7f3ff',
@@ -257,6 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#b3d9ff',
+    marginBottom: 20,
   },
   infoTitle: {
     fontSize: 16,
@@ -269,5 +254,53 @@ const styles = StyleSheet.create({
     color: '#0066cc',
     marginBottom: 5,
   },
+  cardsSection: {
+    marginTop: 10,
+  },
+  cardsSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  cardItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  cardDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  cardKey: {
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  cardTapHint: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+  },
 });
-

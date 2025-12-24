@@ -4,38 +4,14 @@
     "slug": "nfc-wallet-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nfcwallet.app",
+      "bundleIdentifier": "com.nfcwallet.movato",
       "infoPlist": {
-        "NFCReaderUsageDescription": "This app needs NFC access to register cards in your wallet",
-        "com.apple.developer.nfc.readersession.formats": [
-          "NDEF",
-          "TAG"
-        ]
-      },
-      "entitlements": {
-        "com.apple.developer.nfc.readersession.formats": [
-          "NDEF",
-          "TAG"
-        ]
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
-    "plugins": [
-      [
-        "react-native-nfc-manager",
-        {
-          "nfcPermission": "This app needs NFC access to register cards in your wallet"
-        }
-      ]
-    ],
     "extra": {
       "eas": {
         "projectId": "51e7afc0-a79e-4f48-8182-c6598c5933e0"

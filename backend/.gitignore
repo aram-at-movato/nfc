@@ -1,0 +1,19 @@
+node_modules/
+.env
+*.log
+npm-debug.log*
+
+# Certificates (never commit these!)
+certificates/
+*.pem
+*.p12
+*.cer
+*.key
+
+# Generated passes
+passes/
+*.pkpass
+
+# macOS
+.DS_Store
+
