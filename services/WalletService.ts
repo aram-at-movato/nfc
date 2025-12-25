@@ -1,10 +1,9 @@
 import {Alert, Platform, Linking} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
-import {encode as btoa} from 'base-64';
 
 // Your ngrok URL
-const API_URL = 'https://6f149866609a.ngrok-free.app';
+const API_URL = 'https://bfcfb8f3840e.ngrok-free.app';
 
 export interface CardData {
   id: string;
