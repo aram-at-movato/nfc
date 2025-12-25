@@ -70,76 +70,208 @@ app.post('/api/generate-pass', async (req, res) => {
       description: 'Digital Card'
     });
 
-    // Get service centers with order counts for dynamic display
-    const serviceCenters = passStorage.getServiceCenters();
-    const totalOrders = Object.values(serviceCenters).reduce((sum, center) => sum + center.orders, 0);
-
-    // White card with membership, balance, and order info
-    // Header: Membership tier
+    // Modern boarding pass style - minimal and clean
+    
+    // Header fields: Location and Status
     pass.headerFields.push({
-      key: 'membership',
-      label: 'MEMBERSHIP',
-      value: 'Gold Member'
+      key: 'location',
+      label: 'REGION',
+      value: 'Almaty',
+      textAlignment: 'PKTextAlignmentLeft'
     });
 
-    // Primary field: Customer name (large)
+    pass.headerFields.push({
+      key: 'status',
+      label: 'STATUS',
+      value: 'Active',
+      textAlignment: 'PKTextAlignmentRight'
+    });
+
+    // Primary field: Customer name (large, prominent)
     pass.primaryFields.push({
       key: 'name',
-      label: '',
+      label: 'MEMBER',
       value: cardholderName
     });
 
-    // Secondary fields: Balance and Orders (two columns)
+    // Secondary fields: Card ID and Membership tier
     pass.secondaryFields.push({
-      key: 'balance',
-      label: 'BALANCE',
-      value: '$250.00',
+      key: 'cardId',
+      label: 'CARD ID',
+      value: cardKey.substring(0, 16),
       textAlignment: 'PKTextAlignmentLeft'
     });
 
     pass.secondaryFields.push({
-      key: 'orders',
-      label: 'ORDERS',
-      value: totalOrders.toString(),
+      key: 'membership',
+      label: 'TIER',
+      value: 'Gold',
       textAlignment: 'PKTextAlignmentRight'
     });
 
-    // Auxiliary field: Points (single field)
+    // Auxiliary fields: Generation date
     pass.auxiliaryFields.push({
-      key: 'points',
-      label: 'POINTS',
-      value: '1,250',
-      textAlignment: 'PKTextAlignmentCenter'
+      key: 'issued',
+      label: 'ISSUED',
+      value: new Date().toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      }),
+      textAlignment: 'PKTextAlignmentLeft'
     });
+
+    pass.auxiliaryFields.push({
+      key: 'expires',
+      label: 'VALID UNTIL',
+      value: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { 
+        month: 'short', 
+        year: 'numeric' 
+      }),
+      textAlignment: 'PKTextAlignmentRight'
+    });
+
+    // Deep link to Movato app
+    pass.appLaunchURL = `https://apps.apple.com/us/app/movato/id6737806089`;
+
+    // Add QR Code/Barcode as visual backup for NFC
+    pass.barcodes = [{
+      format: 'PKBarcodeFormatQR',
+      message: cardKey,
+      messageEncoding: 'iso-8859-1',
+      altText: `ID: ${id.substring(0, 8).toUpperCase()}`
+    }];
+
+    // Add locations - show pass when near service centers
+    pass.locations = [
+      {
+        latitude: 43.2380,
+        longitude: 76.8892,
+        relevantText: 'Welcome to Almaty Service Center'
+      },
+      {
+        latitude: 43.2094,
+        longitude: 76.6639,
+        relevantText: 'Ramstore Movato - Tap to collect'
+      },
+      {
+        latitude: 43.2567,
+        longitude: 76.9286,
+        relevantText: 'Mega Park Movato location nearby'
+      }
+    ];
+
+    // Set relevant date - pass appears on lock screen near this time
+    const relevantDate = new Date();
+    relevantDate.setHours(relevantDate.getHours() + 1); // 1 hour from now
+    pass.relevantDate = relevantDate.toISOString();
+
+    // Set expiration date - 1 year from now
+    const expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    pass.expirationDate = expirationDate.toISOString();
+
+    // Max distance for location-based display (100 meters)
+    pass.maxDistance = 100;
+
+    // Grouping identifier - groups all Movato cards together
+    pass.groupingIdentifier = 'movato-membership-2025';
+
+    // User info - custom data for your app
+    pass.userInfo = {
+      userId: id,
+      membershipLevel: 'gold',
+      region: 'almaty',
+      registrationDate: new Date().toISOString(),
+      preferences: {
+        language: 'en',
+        notifications: true
+      }
+    };
+
+    // Advanced semantic tags for better iOS integration
+    const nameParts = cardholderName.split(' ');
+    pass.semantics = {
+      // Membership info
+      membershipProgramName: 'Movato Gold',
+      membershipProgramNumber: cardKey.substring(0, 16),
+      
+      // Person info
+      personNameComponents: {
+        givenName: nameParts[0] || cardholderName,
+        familyName: nameParts.slice(1).join(' ') || ''
+      },
+      
+      // Event-like semantics (treating membership as ongoing event)
+      eventName: 'Movato Gold Membership 2025',
+      eventType: 'PKEventTypeGeneric',
+      
+      // Primary venue location
+      venueLocation: {
+        latitude: 43.2380,
+        longitude: 76.8892
+      },
+      venueName: 'Movato Almaty Service Center',
+      venuePhoneNumber: '+7 (727) 123-4567',
+      venueRoom: 'Member Services',
+      
+      // Seat info (using as member tier info)
+      seats: [{
+        seatDescription: 'Gold Member',
+        seatIdentifier: id,
+        seatNumber: id.substring(0, 8),
+        seatRow: 'Gold',
+        seatSection: 'Premium'
+      }]
+    };
     
-    // Back side - Order details by location
+    // Back side - Card information
     pass.backFields.push({
-      key: 'orderSummary',
-      label: 'Order Summary',
-      value: `You have ${totalOrders} order${totalOrders !== 1 ? 's' : ''} ready for pickup at Movato service centers.`
+      key: 'fullCardId',
+      label: 'Full Card ID',
+      value: cardKey
     });
 
-    // Add service center order counts with better formatting
-    Object.entries(serviceCenters).forEach(([centerId, center]) => {
-      pass.backFields.push({
-        key: centerId,
-        label: center.name,
-        value: `${center.orders} order${center.orders !== 1 ? 's' : ''} ready`,
-        textAlignment: 'PKTextAlignmentLeft'
-      });
+    pass.backFields.push({
+      key: 'cardHolder',
+      label: 'Cardholder',
+      value: cardholderName
     });
 
-    // Back side - instructions
+    pass.backFields.push({
+      key: 'membershipTier',
+      label: 'Membership Tier',
+      value: 'Gold Member'
+    });
+
+    pass.backFields.push({
+      key: 'issuedDate',
+      label: 'Issued Date',
+      value: new Date().toLocaleString('en-US', { 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    });
+
+    pass.backFields.push({
+      key: 'serialNumber',
+      label: 'Serial Number',
+      value: id
+    });
+
     pass.backFields.push({
       key: 'instructions',
-      label: 'How to Pick Up',
-      value: '1. Present this card at any Movato service center\n2. Tap your phone to the NFC reader\n3. Collect your orders\n\nOrder counts update automatically.'
+      label: 'How to Use',
+      value: 'Present this card at any Movato service center. Tap your phone to the NFC reader for quick verification. Your unique card ID ensures secure access to services.'
     });
     
     pass.backFields.push({
       key: 'support',
-      label: 'Need Help?',
-      value: 'Contact Movato support or visit any service center. Your unique card number ensures secure order pickup.'
+      label: 'Support',
+      value: 'For assistance, contact Movato support or visit any service center.'
     });
 
     // Add NFC field so the pass can be scanned
